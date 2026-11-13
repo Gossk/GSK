@@ -46,7 +46,8 @@ const isTikTok = (url) => url.includes('tiktok.com');
 function getAuthArgs() {
   const args = [
     '--js-runtimes', 'deno',
-    '--remote-components', 'ejs:github'
+    '--remote-components', 'ejs:github',
+    '--extractor-args', 'youtube:player_client=web_safari,web_embedded,tv'
   ];
 
   const localCookies = path.join(__dirname, 'cookies.txt');
@@ -78,7 +79,9 @@ async function getTikTokFallback(url) {
 // 1. Obtener vista previa del video
 app.post('/api/info', async (req, res) => {
   const { url } = req.body || {};
-  if (!url) return res.status(400).json({ error: 'Ingresa un enlace válido.' });
+  if (!url || !url.trim().startsWith('http')) {
+  return res.status(400).json({ error: 'Pega un enlace válido que empiece con https://' });
+}
 
   try {
     const engine = await getEngine();
