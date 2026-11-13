@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Descargador Privado</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+
+  <div class="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
+    <h1 class="text-2xl font-bold text-center bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+      Media Downloader
+    </h1>
+    <p class="text-slate-400 text-sm text-center mb-6">YouTube, TikTok, Instagram, X y Facebook en máxima calidad</p>
+
+    <!-- Input URL -->
+    <div class="flex gap-2 mb-4">
+      <input id="urlInput" type="text" placeholder="Pega el enlace aquí..."
+        class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500" />
+      <button onclick="fetchInfo()" id="btnBuscar"
+        class="bg-indigo-600 hover:bg-indigo-500 px-5 py-3 rounded-xl font-medium text-sm transition">
+        Buscar
+      </button>
+    </div>
+
+    <!-- Estado / Errores -->
+    <div id="status" class="hidden text-center text-sm py-3 text-amber-400"></div>
+
+    <!-- Vista Previa y Opciones -->
+    <div id="resultCard" class="hidden bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 mt-4">
+      <div class="flex gap-4 items-center mb-4">
+        <img id="thumb" src="" class="w-28 h-20 object-cover rounded-lg bg-slate-700" />
+        <div class="flex-1 min-w-0">
+          <span id="platformBadge" class="text-xs font-semibold uppercase tracking-wider text-indigo-400"></span>
+          <h2 id="videoTitle" class="font-semibold text-sm truncate mt-0.5"></h2>
+          <p id="duration" class="text-xs text-slate-400 mt-1"></p>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Formato</label>
+          <select id="formatSelect" onchange="toggleQuality()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <option value="mp4">MP4 (Video)</option>
+            <option value="webm">WEBM (Video)</option>
+            <option value="mp3">MP3 (Audio)</option>
+            <option value="m4a">M4A (Audio Alta Calidad)</option>
+            <option value="wav">WAV (Sin pérdida)</option>
+          </select>
+        </div>
+
+        <div id="qualityContainer">
+          <label class="block text-xs text-slate-400 mb-1">Calidad Máxima</label>
+          <select id="qualitySelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <option value="best">Mejor disponible (1080p / 4K)</option>
+            <option value="1080">1080p Full HD</option>
+            <option value="720">720p HD</option>
+            <option value="480">480p Ligero</option>
+          </select>
+        </div>
+      </div>
+
+      <button onclick="startDownload()"
+        class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-semibold text-sm transition">
+        Descargar Archivo
+      </button>
+    </div>
+  </div>
+
+  <script>
+    let currentTitle = '';
+
+    function toggleQuality() {
+      const fmt = document.getElementById('formatSelect').value;
+      const isAudio = ['mp3', 'm4a', 'wav'].includes(fmt);
+      document.getElementById('qualityContainer').style.opacity = isAudio ? '0.3' : '1';
+      document.getElementById('qualitySelect').disabled = isAudio;
+    }
+
+    async function fetchInfo() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return;
+
+      const status = document.getElementById('status');
+      const card = document.getElementById('resultCard');
+      
+      card.classList.add('hidden');
+      status.textContent = 'Analizando enlace...';
+      status.classList.remove('hidden');
+
+      try {
+        const res = await fetch('/api/info', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+
+        currentTitle = data.title;
+        document.getElementById('thumb').src = data.thumbnail || '';
+        document.getElementById('videoTitle').textContent = data.title;
+        document.getElementById('platformBadge').textContent = data.platform;
+        document.getElementById('duration').textContent = data.duration ? `Duración: ${data.duration}` : '';
+
+        status.classList.add('hidden');
+        card.classList.remove('hidden');
+      } catch (err) {
+        status.textContent = err.message;
+      }
+    }
+
+    function startDownload() {
+      const url = encodeURIComponent(document.getElementById('urlInput').value.trim());
+      const format = document.getElementById('formatSelect').value;
+      const quality = document.getElementById('qualitySelect').value;
+      const title = encodeURIComponent(currentTitle);
+
+      const status = document.getElementById('status');
+      status.textContent = 'Procesando y uniendo audio/video en el servidor... la descarga iniciará sola en unos segundos.';
+      status.classList.remove('hidden');
+
+      window.location.href = `/api/download?url=${url}&format=${format}&quality=${quality}&title=${title}`;
+    }
+  </script>
+</body>
+</html>
