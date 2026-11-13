@@ -14,26 +14,37 @@ const DOWNLOAD_DIR = path.join(__dirname, 'downloads');
 if (!fs.existsSync(BIN_DIR)) fs.mkdirSync(BIN_DIR);
 if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 
-const ytDlpBinary = path.join(BIN_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
 let ytDlpWrap = null;
 
 async function getEngine() {
   if (ytDlpWrap) return ytDlpWrap;
-  if (!fs.existsSync(ytDlpBinary)) {
-    console.log('Descargando motor yt-dlp oficial...');
-    await YTDlpWrap.downloadFromGithub(ytDlpBinary);
+
+  // En Linux/Render usa el yt-dlp instalado por pip (que ya incluye yt-dlp-ejs)
+  if (process.platform !== 'win32' && fs.existsSync('/usr/local/bin/yt-dlp')) {
+    ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
+    return ytDlpWrap;
   }
-  ytDlpWrap = new YTDlpWrap(ytDlpBinary);
+
+  // En Windows local descarga el .exe si no existe
+  const winBinary = path.join(BIN_DIR, 'yt-dlp.exe');
+  if (!fs.existsSync(winBinary)) {
+    console.log('Descargando motor yt-dlp para Windows...');
+    await YTDlpWrap.downloadFromGithub(winBinary);
+  }
+  ytDlpWrap = new YTDlpWrap(winBinary);
   return ytDlpWrap;
 }
 
-getEngine().then(() => console.log('Motor multimedia listo.'));
+getEngine().then(() => console.log('Motor multimedia con solver EJS listo.'));
 
 const sanitizeFilename = (name) =>
   name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]/g, '').trim() || 'media';
 
 function getAuthArgs() {
-  const args = ['--js-runtimes', 'node'];
+  const args = [
+    '--js-runtimes', `node:${process.execPath}`,
+    '--remote-components', 'ejs:github'
+  ];
 
   const localCookies = path.join(__dirname, 'cookies.txt');
   const renderSecretCookies = '/etc/secrets/cookies.txt';
@@ -107,7 +118,6 @@ app.get('/api/stream-download', async (req, res) => {
     args.push('-x', '--audio-format', format, '--audio-quality', '0');
   } else {
     const heightLimit = quality !== 'best' ? `[height<=${quality}]` : '';
-    // Selector universal: toma la mejor pista de video y audio disponible sin restringir contenedor
     args.push(
       '-f', `bestvideo${heightLimit}+bestaudio/best${heightLimit}/best`,
       '--merge-output-format', format
@@ -125,7 +135,7 @@ app.get('/api/stream-download', async (req, res) => {
   } catch (err) {
     console.error('Error descarga:', err.message);
     if (!res.headersSent) {
-      return res.status(500).send('Error al procesar el archivo.');
+      return res.status(500).send('Error al procesar el archivo: ' + err.message);
     }
   }
 });
