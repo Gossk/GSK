@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { exec } = require('child_process');
+const { Readable } = require('stream');
 const YTDlpWrap = require('yt-dlp-wrap').default;
 const ffmpegPath = require('ffmpeg-static');
 
@@ -19,13 +21,20 @@ let ytDlpWrap = null;
 async function getEngine() {
   if (ytDlpWrap) return ytDlpWrap;
 
+  // En Linux/Render usa el yt-dlp instalado por pip (con Deno y yt-dlp-ejs)
   if (process.platform !== 'win32' && fs.existsSync('/usr/local/bin/yt-dlp')) {
+    // Actualiza yt-dlp en segundo plano al iniciar el servidor para evitar bloqueos por cambios de YouTube
+    exec('pip3 install --no-cache-dir --break-system-packages -U "yt-dlp[default]"', (err) => {
+      if (!err) console.log('yt-dlp actualizado a la última versión.');
+    });
     ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
     return ytDlpWrap;
   }
 
+  // En Windows local descarga el binario oficial si no existe
   const winBinary = path.join(BIN_DIR, 'yt-dlp.exe');
   if (!fs.existsSync(winBinary)) {
+    console.log('Descargando motor yt-dlp para Windows...');
     await YTDlpWrap.downloadFromGithub(winBinary);
   }
   ytDlpWrap = new YTDlpWrap(winBinary);
@@ -58,6 +67,7 @@ function getPlatformArgs(url) {
   else if (fs.existsSync(renderSecretCookies)) sourceFile = renderSecretCookies;
 
   if (sourceFile) {
+    // Limpia saltos de línea de Windows (\r\n) para que yt-dlp lea bien el archivo en Linux
     const cleanContent = fs.readFileSync(sourceFile, 'utf8').replace(/\r\n/g, '\n');
     fs.writeFileSync(tempCookies, cleanContent, 'utf8');
     args.push('--cookies', tempCookies);
@@ -118,8 +128,16 @@ app.post('/api/info', async (req, res) => {
     }
 
     console.error('Error info:', err.message);
+    const isCookieExpired =
+      isYouTube(url) &&
+      (err.message.includes('Sign in to confirm') ||
+        err.message.includes('cookies are no longer valid') ||
+        err.message.includes('HTTP Error 403'));
+
     return res.status(500).json({
-      error: 'No se pudo leer el enlace. Verifica que sea público y válido.'
+      error: isCookieExpired
+        ? 'Las cookies de YouTube expiraron en Render. Renueva tu cookies.txt.'
+        : 'No se pudo leer el enlace. Verifica que sea público y válido.'
     });
   }
 });
@@ -172,12 +190,10 @@ app.get('/api/stream-download', async (req, res) => {
           const mediaRes = await fetch(mediaUrl);
           if (!mediaRes.ok) throw new Error('No se pudo obtener el flujo de TikTok');
 
-          // Fuerza al navegador a descargar el archivo en lugar de reproducirlo en pantalla
           const ext = isAudio ? 'mp3' : 'mp4';
           res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.${ext}"`);
           res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
 
-          const { Readable } = require('stream');
           return Readable.fromWeb(mediaRes.body).pipe(res);
         }
       } catch (tkErr) {
