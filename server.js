@@ -2,7 +2,6 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { exec } = require('child_process');
 const { Readable } = require('stream');
 const YTDlpWrap = require('yt-dlp-wrap').default;
 const ffmpegPath = require('ffmpeg-static');
@@ -21,17 +20,13 @@ let ytDlpWrap = null;
 async function getEngine() {
   if (ytDlpWrap) return ytDlpWrap;
 
-  // En Linux/Render usa el yt-dlp instalado por pip (con Deno y yt-dlp-ejs)
+  // En Linux/Render usa el yt-dlp instalado por pip (que ya incluye yt-dlp-ejs)
   if (process.platform !== 'win32' && fs.existsSync('/usr/local/bin/yt-dlp')) {
-    // Actualiza yt-dlp en segundo plano al iniciar el servidor para evitar bloqueos por cambios de YouTube
-    exec('pip3 install --no-cache-dir --break-system-packages -U "yt-dlp[default]"', (err) => {
-      if (!err) console.log('yt-dlp actualizado a la última versión.');
-    });
     ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
     return ytDlpWrap;
   }
 
-  // En Windows local descarga el binario oficial si no existe
+  // En Windows local descarga el .exe si no existe
   const winBinary = path.join(BIN_DIR, 'yt-dlp.exe');
   if (!fs.existsSync(winBinary)) {
     console.log('Descargando motor yt-dlp para Windows...');
@@ -41,18 +36,14 @@ async function getEngine() {
   return ytDlpWrap;
 }
 
-getEngine().then(() => console.log('Motor multimedia listo.'));
+getEngine().then(() => console.log('Motor multimedia con solver EJS listo.'));
 
 const sanitizeFilename = (name) =>
   name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]/g, '').trim() || 'media';
 
-const isYouTube = (url) => url.includes('youtube.com') || url.includes('youtu.be');
 const isTikTok = (url) => url.includes('tiktok.com');
 
-function getPlatformArgs(url) {
-  // Solo YouTube necesita Deno, EJS y cookies de Google
-  if (!isYouTube(url)) return [];
-
+function getAuthArgs() {
   const args = [
     '--js-runtimes', 'deno',
     '--remote-components', 'ejs:github'
@@ -67,7 +58,6 @@ function getPlatformArgs(url) {
   else if (fs.existsSync(renderSecretCookies)) sourceFile = renderSecretCookies;
 
   if (sourceFile) {
-    // Limpia saltos de línea de Windows (\r\n) para que yt-dlp lea bien el archivo en Linux
     const cleanContent = fs.readFileSync(sourceFile, 'utf8').replace(/\r\n/g, '\n');
     fs.writeFileSync(tempCookies, cleanContent, 'utf8');
     args.push('--cookies', tempCookies);
@@ -76,7 +66,6 @@ function getPlatformArgs(url) {
   return args;
 }
 
-// Respaldo gratuito para TikTok (sin marca de agua) si Render tiene bloqueo de IP
 async function getTikTokFallback(url) {
   const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`);
   const json = await res.json();
@@ -99,7 +88,7 @@ app.post('/api/info', async (req, res) => {
       '--no-playlist',
       '--no-warnings',
       '--ignore-no-formats-error',
-      ...getPlatformArgs(url)
+      ...getAuthArgs()
     ]);
 
     const info = JSON.parse(stdout);
@@ -127,14 +116,8 @@ app.post('/api/info', async (req, res) => {
     }
 
     console.error('Error info:', err.message);
-
-    const realError = (err.message || '')
-      .split('\n')
-      .filter((line) => line.includes('ERROR:'))
-      .join(' | ');
-
     return res.status(500).json({
-      error: realError || 'No se pudo leer el enlace. Verifica los logs de Render.'
+      error: 'No se pudo leer el enlace. Verifica que sea público y válido.'
     });
   }
 });
@@ -152,7 +135,7 @@ app.get('/api/stream-download', async (req, res) => {
     url,
     '--no-playlist',
     '--ffmpeg-location', ffmpegPath,
-    ...getPlatformArgs(url),
+    ...getAuthArgs(),
     '-o', outputTemplate
   ];
 
@@ -177,7 +160,6 @@ app.get('/api/stream-download', async (req, res) => {
       fs.unlink(finalFile, () => {});
     });
   } catch (err) {
-    // Respaldo automático para descargar TikTok directo como archivo (sin abrir pestaña negra)
     if (isTikTok(url)) {
       try {
         const tk = await getTikTokFallback(url);
@@ -200,23 +182,10 @@ app.get('/api/stream-download', async (req, res) => {
 
     console.error('Error descarga:', err.message);
     if (!res.headersSent) {
-      return res.status(500).send('Error al procesar el archivo.');
+      return res.status(500).send('Error al procesar el archivo: ' + err.message);
     }
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
-
-function cleanYouTubeUrl(rawUrl) {
-  try {
-    const parsed = new URL(rawUrl);
-    if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
-      return `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
-    }
-    if (parsed.hostname === 'youtu.be') {
-      return `https://youtu.be${parsed.pathname}`;
-    }
-  } catch {}
-  return rawUrl;
-}
