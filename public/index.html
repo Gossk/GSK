@@ -267,6 +267,15 @@
         }, 400);
       }
     }
+    async function safeJson(res) {
+      const text = await res.text();
+      if (!text) throw new Error(`Respuesta vacía (HTTP ${res.status}).`);
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error(`Ruta no encontrada o error del servidor (HTTP ${res.status}).`);
+      }
+    }
 
     async function fetchInfo() {
       const url = document.getElementById('urlInput').value.trim();
@@ -282,7 +291,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ url })
         });
-        const data = await res.json();
+        const data = await safeJson(res);
         if (!res.ok) throw new Error(data.error || 'Error al obtener datos');
 
         finishProgress(true);
@@ -302,51 +311,25 @@
       }
     }
 
-    async function startDownload() {
+    function startDownload() {
       const url = document.getElementById('urlInput').value.trim();
       if (!url) return;
 
-      const btn = document.getElementById('btnDownload');
-      btn.disabled = true;
-      btn.classList.add('opacity-60', 'cursor-not-allowed');
       document.getElementById('errorBox').classList.add('hidden');
+      startProgress('Procesando flujo en máxima calidad (la descarga iniciará sola)...');
 
-      startProgress('Descargando y fusionando audio/video en el servidor...');
+      const query = new URLSearchParams({
+        url,
+        format: selectedFormat,
+        quality: selectedQuality,
+        title: currentTitle
+      });
 
-      try {
-        const query = new URLSearchParams({
-          url,
-          format: selectedFormat,
-          quality: selectedQuality,
-          title: currentTitle
-        });
+      window.location.href = `/api/stream-download?${query.toString()}`;
 
-        const res = await fetch(`/api/download?${query.toString()}`);
-        if (!res.ok) {
-          const msg = await res.text();
-          throw new Error(msg || 'Fallo al generar el archivo.');
-        }
-
-        const blob = await res.blob();
-        const downloadUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `${currentTitle || 'descarga'}.${selectedFormat}`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(downloadUrl);
-
+      setTimeout(() => {
         finishProgress(true);
-      } catch (err) {
-        clearInterval(progressInterval);
-        document.getElementById('loaderBox').classList.add('hidden');
-        document.getElementById('errorText').textContent = err.message;
-        document.getElementById('errorBox').classList.remove('hidden');
-      } finally {
-        btn.disabled = false;
-        btn.classList.remove('opacity-60', 'cursor-not-allowed');
-      }
+      }, 3500);
     }
   </script>
 </body>
