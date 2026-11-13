@@ -3,91 +3,278 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Descargador Privado</title>
+  <title>GSK Studio — Media Converter</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .animate-shimmer {
+      animation: shimmer 1.6s infinite linear;
+    }
+    .glass {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+<body class="bg-[#060913] text-slate-100 min-h-screen flex flex-col items-center justify-center p-4 relative overflow-x-hidden selection:bg-indigo-500 selection:text-white">
 
-  <div class="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl">
-    <h1 class="text-2xl font-bold text-center bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent mb-2">
-      Media Downloader
-    </h1>
-    <p class="text-slate-400 text-sm text-center mb-6">YouTube, TikTok, Instagram, X y Facebook en máxima calidad</p>
+  <!-- Luces de fondo ambientales -->
+  <div class="fixed top-[-15%] left-[-10%] w-[500px] h-[500px] bg-indigo-600/20 rounded-full blur-[130px] pointer-events-none"></div>
+  <div class="fixed bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-cyan-500/15 rounded-full blur-[130px] pointer-events-none"></div>
 
-    <!-- Input URL -->
-    <div class="flex gap-2 mb-4">
-      <input id="urlInput" type="text" placeholder="Pega el enlace aquí..."
-        class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500" />
-      <button onclick="fetchInfo()" id="btnBuscar"
-        class="bg-indigo-600 hover:bg-indigo-500 px-5 py-3 rounded-xl font-medium text-sm transition">
-        Buscar
-      </button>
+  <main class="w-full max-w-2xl z-10">
+    <!-- Header -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold mb-4">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        Alta Velocidad • Sin Anuncios • HD / 4K
+      </div>
+      <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">
+        GSK Media Converter
+      </h1>
+      <p class="text-slate-400 text-sm sm:text-base mt-3 max-w-md mx-auto">
+        Descarga videos y extrae audio en máxima calidad desde YouTube, TikTok, Instagram, X y Facebook.
+      </p>
     </div>
 
-    <!-- Estado / Errores -->
-    <div id="status" class="hidden text-center text-sm py-3 text-amber-400"></div>
+    <!-- Contenedor Principal -->
+    <div class="glass border border-slate-800/80 rounded-3xl p-5 sm:p-8 shadow-[0_20px_70px_rgba(0,0,0,0.65)]">
+      
+      <!-- Barra de búsqueda -->
+      <div class="relative flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <div class="absolute inset-y-0 left-4 flex items-center pointer-events-none text-slate-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </div>
+          <input id="urlInput" type="text" placeholder="Pega aquí el enlace del video..."
+            onkeydown="if(event.key==='Enter') fetchInfo()"
+            class="w-full bg-slate-900/90 border border-slate-700/80 rounded-2xl pl-12 pr-20 py-4 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition" />
+          <button onclick="pasteClipboard()" type="button"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 px-3 py-1.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl border border-slate-700 transition">
+            Pegar
+          </button>
+        </div>
 
-    <!-- Vista Previa y Opciones -->
-    <div id="resultCard" class="hidden bg-slate-800/60 border border-slate-700/80 rounded-xl p-4 mt-4">
-      <div class="flex gap-4 items-center mb-4">
-        <img id="thumb" src="" class="w-28 h-20 object-cover rounded-lg bg-slate-700" />
-        <div class="flex-1 min-w-0">
-          <span id="platformBadge" class="text-xs font-semibold uppercase tracking-wider text-indigo-400"></span>
-          <h2 id="videoTitle" class="font-semibold text-sm truncate mt-0.5"></h2>
-          <p id="duration" class="text-xs text-slate-400 mt-1"></p>
+        <button onclick="fetchInfo()" id="btnBuscar"
+          class="bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 active:scale-[0.98] px-7 py-4 rounded-2xl font-bold text-sm text-white shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-2 shrink-0">
+          <span>Obtener</span>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Badges de plataformas soportadas -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mt-4 text-[11px] font-medium text-slate-400">
+        <span class="px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-800">YouTube</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-800">TikTok</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-800">Instagram</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-800">X / Twitter</span>
+        <span class="px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-800">Facebook</span>
+      </div>
+
+      <!-- Barra de Carga Animada (Skeleton + Progress Loader) -->
+      <div id="loaderBox" class="hidden mt-7">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
+          <div class="flex items-center justify-between text-xs font-semibold text-indigo-300 mb-2.5">
+            <span id="loaderLabel" class="flex items-center gap-2">
+              <svg class="w-4 h-4 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+              Extrayendo flujos multimedia...
+            </span>
+            <span id="loaderPercent">0%</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden relative">
+            <div id="progressBar" class="h-full bg-gradient-to-r from-indigo-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-300 relative overflow-hidden" style="width: 0%">
+              <div class="absolute inset-0 bg-white/30 animate-shimmer"></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3 mb-4">
+      <!-- Alerta de Error -->
+      <div id="errorBox" class="hidden mt-6 bg-rose-500/10 border border-rose-500/30 text-rose-300 px-4 py-3.5 rounded-2xl text-sm flex items-center gap-3">
+        <svg class="w-5 h-5 text-rose-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span id="errorText"></span>
+      </div>
+
+      <!-- Tarjeta de Resultado -->
+      <div id="resultCard" class="hidden mt-7 pt-6 border-t border-slate-800/80 space-y-6">
+        
+        <!-- Preview del Video -->
+        <div class="flex flex-col sm:flex-row gap-4 bg-slate-900/70 border border-slate-800 p-4 rounded-2xl">
+          <div class="relative w-full sm:w-44 h-28 rounded-xl overflow-hidden bg-slate-800 shrink-0">
+            <img id="thumb" src="" class="w-full h-full object-cover" />
+            <span id="duration" class="absolute bottom-2 right-2 bg-black/80 backdrop-blur-md text-[11px] font-bold px-2 py-0.5 rounded-md text-white"></span>
+          </div>
+          <div class="flex flex-col justify-center min-w-0">
+            <div class="flex items-center gap-2 mb-1.5">
+              <span id="platformBadge" class="px-2.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-[11px] font-bold uppercase tracking-wider"></span>
+              <span id="uploader" class="text-xs text-slate-400 truncate"></span>
+            </div>
+            <h2 id="videoTitle" class="font-bold text-base text-white line-clamp-2 leading-snug"></h2>
+          </div>
+        </div>
+
+        <!-- Selector Visual de Formato -->
         <div>
-          <label class="block text-xs text-slate-400 mb-1">Formato</label>
-          <select id="formatSelect" onchange="toggleQuality()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
-            <option value="mp4">MP4 (Video)</option>
-            <option value="webm">WEBM (Video)</option>
-            <option value="mp3">MP3 (Audio)</option>
-            <option value="m4a">M4A (Audio Alta Calidad)</option>
-            <option value="wav">WAV (Sin pérdida)</option>
-          </select>
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">1. Elige el formato</label>
+          <div class="grid grid-cols-2 sm:grid-cols-5 gap-2" id="formatGrid">
+            <button type="button" onclick="selectFormat('mp4', this)" data-fmt="mp4"
+              class="fmt-btn active-fmt bg-indigo-600/20 border-indigo-500 text-white border rounded-xl py-2.5 px-3 text-center transition">
+              <div class="text-sm font-bold">MP4</div>
+              <div class="text-[10px] text-indigo-300">Video HD</div>
+            </button>
+            <button type="button" onclick="selectFormat('webm', this)" data-fmt="webm"
+              class="fmt-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-center transition">
+              <div class="text-sm font-bold">WEBM</div>
+              <div class="text-[10px] text-slate-400">Video Web</div>
+            </button>
+            <button type="button" onclick="selectFormat('mp3', this)" data-fmt="mp3"
+              class="fmt-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-center transition">
+              <div class="text-sm font-bold">MP3</div>
+              <div class="text-[10px] text-slate-400">Audio 320k</div>
+            </button>
+            <button type="button" onclick="selectFormat('m4a', this)" data-fmt="m4a"
+              class="fmt-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-center transition">
+              <div class="text-sm font-bold">M4A</div>
+              <div class="text-[10px] text-slate-400">Audio AAC</div>
+            </button>
+            <button type="button" onclick="selectFormat('wav', this)" data-fmt="wav"
+              class="fmt-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-center transition">
+              <div class="text-sm font-bold">WAV</div>
+              <div class="text-[10px] text-slate-400">Sin pérdida</div>
+            </button>
+          </div>
         </div>
 
-        <div id="qualityContainer">
-          <label class="block text-xs text-slate-400 mb-1">Calidad Máxima</label>
-          <select id="qualitySelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm">
-            <option value="best">Mejor disponible (1080p / 4K)</option>
-            <option value="1080">1080p Full HD</option>
-            <option value="720">720p HD</option>
-            <option value="480">480p Ligero</option>
-          </select>
+        <!-- Selector Visual de Calidad -->
+        <div id="qualityContainer" class="transition-opacity duration-200">
+          <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5">2. Resolución de video</label>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2" id="qualityGrid">
+            <button type="button" onclick="selectQuality('best', this)"
+              class="qual-btn bg-cyan-500/20 border-cyan-400 text-white border rounded-xl py-2.5 px-3 text-xs font-bold transition">
+              Máxima (4K / 1080p)
+            </button>
+            <button type="button" onclick="selectQuality('1080', this)"
+              class="qual-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-xs font-bold transition">
+              1080p Full HD
+            </button>
+            <button type="button" onclick="selectQuality('720', this)"
+              class="qual-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-xs font-bold transition">
+              720p HD
+            </button>
+            <button type="button" onclick="selectQuality('480', this)"
+              class="qual-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-xs font-bold transition">
+              480p Ligero
+            </button>
+          </div>
         </div>
+
+        <!-- Botón de Descarga Principal -->
+        <button onclick="startDownload()" id="btnDownload"
+          class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-[0.99] py-4 rounded-2xl font-extrabold text-sm text-slate-950 shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2.5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+          </svg>
+          <span>Descargar Archivo Ahora</span>
+        </button>
+
       </div>
-
-      <button onclick="startDownload()"
-        class="w-full bg-emerald-600 hover:bg-emerald-500 py-3 rounded-xl font-semibold text-sm transition">
-        Descargar Archivo
-      </button>
     </div>
-  </div>
+  </main>
 
   <script>
     let currentTitle = '';
+    let selectedFormat = 'mp4';
+    let selectedQuality = 'best';
+    let progressInterval = null;
 
-    function toggleQuality() {
-      const fmt = document.getElementById('formatSelect').value;
+    async function pasteClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+        document.getElementById('urlInput').value = text;
+        fetchInfo();
+      } catch {
+        document.getElementById('urlInput').focus();
+      }
+    }
+
+    function selectFormat(fmt, btn) {
+      selectedFormat = fmt;
+      document.querySelectorAll('.fmt-btn').forEach(b => {
+        b.className = 'fmt-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-center transition';
+      });
+      btn.className = 'fmt-btn bg-indigo-600/20 border-indigo-500 text-white border rounded-xl py-2.5 px-3 text-center transition';
+
       const isAudio = ['mp3', 'm4a', 'wav'].includes(fmt);
-      document.getElementById('qualityContainer').style.opacity = isAudio ? '0.3' : '1';
-      document.getElementById('qualitySelect').disabled = isAudio;
+      const qBox = document.getElementById('qualityContainer');
+      qBox.style.opacity = isAudio ? '0.35' : '1';
+      qBox.style.pointerEvents = isAudio ? 'none' : 'auto';
+    }
+
+    function selectQuality(qual, btn) {
+      selectedQuality = qual;
+      document.querySelectorAll('.qual-btn').forEach(b => {
+        b.className = 'qual-btn bg-slate-900/80 border-slate-800 text-slate-300 hover:border-slate-700 border rounded-xl py-2.5 px-3 text-xs font-bold transition';
+      });
+      btn.className = 'qual-btn bg-cyan-500/20 border-cyan-400 text-white border rounded-xl py-2.5 px-3 text-xs font-bold transition';
+    }
+
+    function startProgress(labelText) {
+      clearInterval(progressInterval);
+      const loaderBox = document.getElementById('loaderBox');
+      const bar = document.getElementById('progressBar');
+      const pct = document.getElementById('loaderPercent');
+      const label = document.getElementById('loaderLabel');
+
+      label.lastChild.textContent = ` ${labelText}`;
+      loaderBox.classList.remove('hidden');
+      let current = 8;
+      bar.style.width = `${current}%`;
+      pct.textContent = `${current}%`;
+
+      progressInterval = setInterval(() => {
+        if (current < 92) {
+          current += Math.max(1, Math.floor((95 - current) * 0.12));
+          bar.style.width = `${current}%`;
+          pct.textContent = `${current}%`;
+        }
+      }, 350);
+    }
+
+    function finishProgress(hideAfter = true) {
+      clearInterval(progressInterval);
+      const bar = document.getElementById('progressBar');
+      const pct = document.getElementById('loaderPercent');
+      bar.style.width = '100%';
+      pct.textContent = '100%';
+      if (hideAfter) {
+        setTimeout(() => {
+          document.getElementById('loaderBox').classList.add('hidden');
+        }, 400);
+      }
     }
 
     async function fetchInfo() {
       const url = document.getElementById('urlInput').value.trim();
       if (!url) return;
 
-      const status = document.getElementById('status');
-      const card = document.getElementById('resultCard');
-      
-      card.classList.add('hidden');
-      status.textContent = 'Analizando enlace...';
-      status.classList.remove('hidden');
+      document.getElementById('resultCard').classList.add('hidden');
+      document.getElementById('errorBox').classList.add('hidden');
+      startProgress('Conectando y leyendo calidades disponibles...');
 
       try {
         const res = await fetch('/api/info', {
@@ -96,32 +283,70 @@
           body: JSON.stringify({ url })
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
+        if (!res.ok) throw new Error(data.error || 'Error al obtener datos');
 
+        finishProgress(true);
         currentTitle = data.title;
         document.getElementById('thumb').src = data.thumbnail || '';
         document.getElementById('videoTitle').textContent = data.title;
         document.getElementById('platformBadge').textContent = data.platform;
-        document.getElementById('duration').textContent = data.duration ? `Duración: ${data.duration}` : '';
+        document.getElementById('uploader').textContent = data.uploader;
+        document.getElementById('duration').textContent = data.duration;
 
-        status.classList.add('hidden');
-        card.classList.remove('hidden');
+        document.getElementById('resultCard').classList.remove('hidden');
       } catch (err) {
-        status.textContent = err.message;
+        clearInterval(progressInterval);
+        document.getElementById('loaderBox').classList.add('hidden');
+        document.getElementById('errorText').textContent = err.message;
+        document.getElementById('errorBox').classList.remove('hidden');
       }
     }
 
-    function startDownload() {
-      const url = encodeURIComponent(document.getElementById('urlInput').value.trim());
-      const format = document.getElementById('formatSelect').value;
-      const quality = document.getElementById('qualitySelect').value;
-      const title = encodeURIComponent(currentTitle);
+    async function startDownload() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return;
 
-      const status = document.getElementById('status');
-      status.textContent = 'Procesando y uniendo audio/video en el servidor... la descarga iniciará sola en unos segundos.';
-      status.classList.remove('hidden');
+      const btn = document.getElementById('btnDownload');
+      btn.disabled = true;
+      btn.classList.add('opacity-60', 'cursor-not-allowed');
+      document.getElementById('errorBox').classList.add('hidden');
 
-      window.location.href = `/api/download?url=${url}&format=${format}&quality=${quality}&title=${title}`;
+      startProgress('Descargando y fusionando audio/video en el servidor...');
+
+      try {
+        const query = new URLSearchParams({
+          url,
+          format: selectedFormat,
+          quality: selectedQuality,
+          title: currentTitle
+        });
+
+        const res = await fetch(`/api/download?${query.toString()}`);
+        if (!res.ok) {
+          const msg = await res.text();
+          throw new Error(msg || 'Fallo al generar el archivo.');
+        }
+
+        const blob = await res.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `${currentTitle || 'descarga'}.${selectedFormat}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(downloadUrl);
+
+        finishProgress(true);
+      } catch (err) {
+        clearInterval(progressInterval);
+        document.getElementById('loaderBox').classList.add('hidden');
+        document.getElementById('errorText').textContent = err.message;
+        document.getElementById('errorBox').classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove('opacity-60', 'cursor-not-allowed');
+      }
     }
   </script>
 </body>
