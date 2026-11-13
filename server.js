@@ -162,13 +162,23 @@ app.get('/api/stream-download', async (req, res) => {
       fs.unlink(finalFile, () => {});
     });
   } catch (err) {
-    // Respaldo automático para descargar TikTok HD o MP3 sin marca de agua
+    // Respaldo automático para descargar TikTok directo como archivo (sin abrir pestaña negra)
     if (isTikTok(url)) {
       try {
         const tk = await getTikTokFallback(url);
         const mediaUrl = isAudio ? tk.music : (tk.hdplay || tk.play);
+
         if (mediaUrl) {
-          return res.redirect(mediaUrl);
+          const mediaRes = await fetch(mediaUrl);
+          if (!mediaRes.ok) throw new Error('No se pudo obtener el flujo de TikTok');
+
+          // Fuerza al navegador a descargar el archivo en lugar de reproducirlo en pantalla
+          const ext = isAudio ? 'mp3' : 'mp4';
+          res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.${ext}"`);
+          res.setHeader('Content-Type', isAudio ? 'audio/mpeg' : 'video/mp4');
+
+          const { Readable } = require('stream');
+          return Readable.fromWeb(mediaRes.body).pipe(res);
         }
       } catch (tkErr) {
         console.error('Error descarga respaldo TikTok:', tkErr.message);
