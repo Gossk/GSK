@@ -20,7 +20,7 @@ let ytDlpWrap = null;
 async function getEngine() {
   if (ytDlpWrap) return ytDlpWrap;
   if (!fs.existsSync(ytDlpBinary)) {
-    console.log('Descargando motor yt-dlp oficial (solo la primera vez)...');
+    console.log('Descargando motor yt-dlp oficial...');
     await YTDlpWrap.downloadFromGithub(ytDlpBinary);
   }
   ytDlpWrap = new YTDlpWrap(ytDlpBinary);
@@ -32,12 +32,8 @@ getEngine().then(() => console.log('Motor multimedia listo.'));
 const sanitizeFilename = (name) =>
   name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]/g, '').trim() || 'media';
 
-// Prepara los argumentos de cookies y runtime para evitar bloqueo de bot en Render
 function getAuthArgs() {
-  const args = [
-    '--js-runtimes', 'node',
-    '--extractor-args', 'youtube:player_client=tv_embedded,mweb'
-  ];
+  const args = ['--js-runtimes', 'node'];
 
   const localCookies = path.join(__dirname, 'cookies.txt');
   const renderSecretCookies = '/etc/secrets/cookies.txt';
@@ -48,7 +44,6 @@ function getAuthArgs() {
   else if (fs.existsSync(renderSecretCookies)) sourceFile = renderSecretCookies;
 
   if (sourceFile) {
-    // Normaliza saltos de línea de Windows (\r\n) a Linux (\n) para que yt-dlp no ignore las cookies
     const cleanContent = fs.readFileSync(sourceFile, 'utf8').replace(/\r\n/g, '\n');
     fs.writeFileSync(tempCookies, cleanContent, 'utf8');
     args.push('--cookies', tempCookies);
@@ -56,6 +51,7 @@ function getAuthArgs() {
 
   return args;
 }
+
 // 1. Obtener vista previa del video
 app.post('/api/info', async (req, res) => {
   const { url } = req.body || {};
@@ -68,6 +64,7 @@ app.post('/api/info', async (req, res) => {
       '--dump-json',
       '--no-playlist',
       '--no-warnings',
+      '--ignore-no-formats-error',
       ...getAuthArgs()
     ]);
 
@@ -81,11 +78,8 @@ app.post('/api/info', async (req, res) => {
     });
   } catch (err) {
     console.error('Error info:', err.message);
-    const isBot = err.message.includes('Sign in to confirm');
     return res.status(500).json({
-      error: isBot
-        ? 'Falta configurar cookies.txt en Render para saltar el bloqueo anti-bot de YouTube.'
-        : 'No se pudo leer el enlace. Verifica que sea público y válido.'
+      error: 'No se pudo leer el enlace. Verifica que sea público y válido.'
     });
   }
 });
@@ -113,8 +107,9 @@ app.get('/api/stream-download', async (req, res) => {
     args.push('-x', '--audio-format', format, '--audio-quality', '0');
   } else {
     const heightLimit = quality !== 'best' ? `[height<=${quality}]` : '';
+    // Selector universal: toma la mejor pista de video y audio disponible sin restringir contenedor
     args.push(
-      '-f', `bestvideo${heightLimit}[ext=mp4]+bestaudio[ext=m4a]/best${heightLimit}[ext=mp4]/best`,
+      '-f', `bestvideo${heightLimit}+bestaudio/best${heightLimit}/best`,
       '--merge-output-format', format
     );
   }
