@@ -111,7 +111,6 @@ app.post('/api/info', async (req, res) => {
       platform: info.extractor_key || 'Video'
     });
   } catch (err) {
-    // Si yt-dlp falla con TikTok en Render, usamos el respaldo de TikWM automáticamente
     if (isTikTok(url)) {
       try {
         const tk = await getTikTokFallback(url);
@@ -128,16 +127,14 @@ app.post('/api/info', async (req, res) => {
     }
 
     console.error('Error info:', err.message);
-    const isCookieExpired =
-      isYouTube(url) &&
-      (err.message.includes('Sign in to confirm') ||
-        err.message.includes('cookies are no longer valid') ||
-        err.message.includes('HTTP Error 403'));
+
+    const realError = (err.message || '')
+      .split('\n')
+      .filter((line) => line.includes('ERROR:'))
+      .join(' | ');
 
     return res.status(500).json({
-      error: isCookieExpired
-        ? 'Las cookies de YouTube expiraron en Render. Renueva tu cookies.txt.'
-        : 'No se pudo leer el enlace. Verifica que sea público y válido.'
+      error: realError || 'No se pudo leer el enlace. Verifica los logs de Render.'
     });
   }
 });
@@ -210,3 +207,16 @@ app.get('/api/stream-download', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor corriendo en http://localhost:${PORT}`));
+
+function cleanYouTubeUrl(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.hostname.includes('youtube.com') && parsed.searchParams.has('v')) {
+      return `https://www.youtube.com/watch?v=${parsed.searchParams.get('v')}`;
+    }
+    if (parsed.hostname === 'youtu.be') {
+      return `https://youtu.be${parsed.pathname}`;
+    }
+  } catch {}
+  return rawUrl;
+}
