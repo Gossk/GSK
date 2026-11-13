@@ -12,35 +12,48 @@ if (!fs.existsSync(DOWNLOAD_DIR)) fs.mkdirSync(DOWNLOAD_DIR);
 
 const sanitizeFilename = (name) => name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]/g, '').trim() || 'media';
 
-// Detecta cookies en la raíz o en Secret Files de Render
 function getBaseArgs() {
-  const args = ['--no-playlist', '--js-runtimes', 'node'];
+  const args = [
+    '--no-playlist',
+    '--no-warnings',
+    '--js-runtimes', 'node',
+    '--extractor-args', 'youtube:player_client=web,tv_embedded'
+  ];
+
   const localCookies = path.join(__dirname, 'cookies.txt');
   const renderSecretCookies = '/etc/secrets/cookies.txt';
+  const writableCookies = '/tmp/cookies.txt';
 
+  // Copiar cookies a /tmp porque yt-dlp necesita permisos de escritura sobre el archivo
   if (fs.existsSync(localCookies)) {
-    args.push('--cookies', localCookies);
+    fs.copyFileSync(localCookies, writableCookies);
+    args.push('--cookies', writableCookies);
   } else if (fs.existsSync(renderSecretCookies)) {
-    args.push('--cookies', renderSecretCookies);
+    fs.copyFileSync(renderSecretCookies, writableCookies);
+    args.push('--cookies', writableCookies);
   }
+
   return args;
 }
 
-// 1. Obtener metadatos del video
+// 1. Obtener metadatos
 app.post('/api/info', (req, res) => {
   const { url } = req.body;
-  if (!url) return res.status(400).json({ error: 'Por favor ingresa un enlace válido.' });
+  if (!url) return res.status(400).json({ error: 'Ingresa un enlace válido.' });
 
   const args = [...getBaseArgs(), '--dump-json', url];
 
-  execFile('yt-dlp', args, { maxBuffer: 1024 * 1024 * 15 }, (error, stdout, stderr) => {
+  execFile('yt-dlp', args, { maxBuffer: 1024 * 1024 * 20 }, (error, stdout, stderr) => {
     if (error) {
-      console.error('Error yt-dlp info:', stderr || error.message);
-      const isBotBlock = (stderr || '').includes('Sign in to confirm');
+      console.error('YT-DLP ERROR:', stderr || error.message);
+      // Extrae la línea real del error de yt-dlp para que sepas exactamente qué pasó
+      const errorLines = (stderr || error.message)
+        .split('\n')
+        .filter(line => line.includes('ERROR:'))
+        .join(' | ');
+
       return res.status(500).json({
-        error: isBotBlock
-          ? 'YouTube bloqueó la IP del servidor. Agrega tu archivo cookies.txt.'
-          : 'No se pudo obtener información. Verifica que el enlace sea público.'
+        error: errorLines || 'Error desconocido al ejecutar yt-dlp en el servidor.'
       });
     }
 
@@ -54,7 +67,7 @@ app.post('/api/info', (req, res) => {
         platform: info.extractor_key
       });
     } catch (e) {
-      res.status(500).json({ error: 'Error al procesar los datos del video.' });
+      res.status(500).json({ error: 'No se pudo interpretar la respuesta del video.' });
     }
   });
 });
@@ -85,8 +98,12 @@ app.get('/api/download', (req, res) => {
 
   execFile('yt-dlp', args, (error, stdout, stderr) => {
     if (error) {
-      console.error('Error yt-dlp download:', stderr || error.message);
-      return res.status(500).send('Error al procesar el archivo en el servidor.');
+      console.error('YT-DLP DOWNLOAD ERROR:', stderr || error.message);
+      const errorLines = (stderr || error.message)
+        .split('\n')
+        .filter(line => line.includes('ERROR:'))
+        .join(' | ');
+      return res.status(500).send(errorLines || 'Error al procesar el archivo.');
     }
 
     const finalFile = path.join(DOWNLOAD_DIR, `${fileId}.${ext}`);
@@ -97,4 +114,4 @@ app.get('/api/download', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Servidor GSK Media activo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor activo en puerto ${PORT}`));
