@@ -34,21 +34,28 @@ const sanitizeFilename = (name) =>
 
 // Prepara los argumentos de cookies y runtime para evitar bloqueo de bot en Render
 function getAuthArgs() {
-  const args = ['--js-runtimes', 'node'];
+  const args = [
+    '--js-runtimes', 'node',
+    '--extractor-args', 'youtube:player_client=tv_embedded,mweb'
+  ];
+
   const localCookies = path.join(__dirname, 'cookies.txt');
   const renderSecretCookies = '/etc/secrets/cookies.txt';
   const tempCookies = path.join(os.tmpdir(), 'yt_cookies.txt');
 
-  if (fs.existsSync(localCookies)) {
-    fs.copyFileSync(localCookies, tempCookies);
-    args.push('--cookies', tempCookies);
-  } else if (fs.existsSync(renderSecretCookies)) {
-    fs.copyFileSync(renderSecretCookies, tempCookies);
+  let sourceFile = null;
+  if (fs.existsSync(localCookies)) sourceFile = localCookies;
+  else if (fs.existsSync(renderSecretCookies)) sourceFile = renderSecretCookies;
+
+  if (sourceFile) {
+    // Normaliza saltos de línea de Windows (\r\n) a Linux (\n) para que yt-dlp no ignore las cookies
+    const cleanContent = fs.readFileSync(sourceFile, 'utf8').replace(/\r\n/g, '\n');
+    fs.writeFileSync(tempCookies, cleanContent, 'utf8');
     args.push('--cookies', tempCookies);
   }
+
   return args;
 }
-
 // 1. Obtener vista previa del video
 app.post('/api/info', async (req, res) => {
   const { url } = req.body || {};
