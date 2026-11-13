@@ -19,28 +19,31 @@ let ytDlpWrap = null;
 async function getEngine() {
   if (ytDlpWrap) return ytDlpWrap;
 
-  // En Linux/Render usa el yt-dlp instalado por pip (que ya incluye yt-dlp-ejs)
   if (process.platform !== 'win32' && fs.existsSync('/usr/local/bin/yt-dlp')) {
     ytDlpWrap = new YTDlpWrap('/usr/local/bin/yt-dlp');
     return ytDlpWrap;
   }
 
-  // En Windows local descarga el .exe si no existe
   const winBinary = path.join(BIN_DIR, 'yt-dlp.exe');
   if (!fs.existsSync(winBinary)) {
-    console.log('Descargando motor yt-dlp para Windows...');
     await YTDlpWrap.downloadFromGithub(winBinary);
   }
   ytDlpWrap = new YTDlpWrap(winBinary);
   return ytDlpWrap;
 }
 
-getEngine().then(() => console.log('Motor multimedia con solver EJS listo.'));
+getEngine().then(() => console.log('Motor multimedia listo.'));
 
 const sanitizeFilename = (name) =>
   name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]/g, '').trim() || 'media';
 
-function getAuthArgs() {
+const isYouTube = (url) => url.includes('youtube.com') || url.includes('youtu.be');
+const isTikTok = (url) => url.includes('tiktok.com');
+
+function getPlatformArgs(url) {
+  // Solo YouTube necesita Deno, EJS y cookies de Google
+  if (!isYouTube(url)) return [];
+
   const args = [
     '--js-runtimes', 'deno',
     '--remote-components', 'ejs:github'
@@ -63,6 +66,16 @@ function getAuthArgs() {
   return args;
 }
 
+// Respaldo gratuito para TikTok (sin marca de agua) si Render tiene bloqueo de IP
+async function getTikTokFallback(url) {
+  const res = await fetch(`https://www.tikwm.com/api/?url=${encodeURIComponent(url)}&hd=1`);
+  const json = await res.json();
+  if (json.code === 0 && json.data) {
+    return json.data;
+  }
+  throw new Error('No se pudo extraer desde TikWM');
+}
+
 // 1. Obtener vista previa del video
 app.post('/api/info', async (req, res) => {
   const { url } = req.body || {};
@@ -76,7 +89,7 @@ app.post('/api/info', async (req, res) => {
       '--no-playlist',
       '--no-warnings',
       '--ignore-no-formats-error',
-      ...getAuthArgs()
+      ...getPlatformArgs(url)
     ]);
 
     const info = JSON.parse(stdout);
@@ -88,6 +101,22 @@ app.post('/api/info', async (req, res) => {
       platform: info.extractor_key || 'Video'
     });
   } catch (err) {
+    // Si yt-dlp falla con TikTok en Render, usamos el respaldo de TikWM automáticamente
+    if (isTikTok(url)) {
+      try {
+        const tk = await getTikTokFallback(url);
+        return res.json({
+          title: tk.title || 'Video de TikTok',
+          thumbnail: tk.cover || '',
+          duration: tk.duration ? `${tk.duration}s` : 'HD',
+          uploader: tk.author?.nickname || 'TikTok',
+          platform: 'TikTok'
+        });
+      } catch (tkErr) {
+        console.error('Error respaldo TikTok:', tkErr.message);
+      }
+    }
+
     console.error('Error info:', err.message);
     return res.status(500).json({
       error: 'No se pudo leer el enlace. Verifica que sea público y válido.'
@@ -108,7 +137,7 @@ app.get('/api/stream-download', async (req, res) => {
     url,
     '--no-playlist',
     '--ffmpeg-location', ffmpegPath,
-    ...getAuthArgs(),
+    ...getPlatformArgs(url),
     '-o', outputTemplate
   ];
 
@@ -133,9 +162,22 @@ app.get('/api/stream-download', async (req, res) => {
       fs.unlink(finalFile, () => {});
     });
   } catch (err) {
+    // Respaldo automático para descargar TikTok HD o MP3 sin marca de agua
+    if (isTikTok(url)) {
+      try {
+        const tk = await getTikTokFallback(url);
+        const mediaUrl = isAudio ? tk.music : (tk.hdplay || tk.play);
+        if (mediaUrl) {
+          return res.redirect(mediaUrl);
+        }
+      } catch (tkErr) {
+        console.error('Error descarga respaldo TikTok:', tkErr.message);
+      }
+    }
+
     console.error('Error descarga:', err.message);
     if (!res.headersSent) {
-      return res.status(500).send('Error al procesar el archivo: ' + err.message);
+      return res.status(500).send('Error al procesar el archivo.');
     }
   }
 });
