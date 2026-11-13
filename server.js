@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const YTDlpWrap = require('yt-dlp-wrap').default;
 const ffmpegPath = require('ffmpeg-static');
 
@@ -26,11 +27,27 @@ async function getEngine() {
   return ytDlpWrap;
 }
 
-// Pre-descargar el binario al arrancar
 getEngine().then(() => console.log('Motor multimedia listo.'));
 
 const sanitizeFilename = (name) =>
   name.replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ _-]/g, '').trim() || 'media';
+
+// Prepara los argumentos de cookies y runtime para evitar bloqueo de bot en Render
+function getAuthArgs() {
+  const args = ['--js-runtimes', 'node'];
+  const localCookies = path.join(__dirname, 'cookies.txt');
+  const renderSecretCookies = '/etc/secrets/cookies.txt';
+  const tempCookies = path.join(os.tmpdir(), 'yt_cookies.txt');
+
+  if (fs.existsSync(localCookies)) {
+    fs.copyFileSync(localCookies, tempCookies);
+    args.push('--cookies', tempCookies);
+  } else if (fs.existsSync(renderSecretCookies)) {
+    fs.copyFileSync(renderSecretCookies, tempCookies);
+    args.push('--cookies', tempCookies);
+  }
+  return args;
+}
 
 // 1. Obtener vista previa del video
 app.post('/api/info', async (req, res) => {
@@ -43,7 +60,8 @@ app.post('/api/info', async (req, res) => {
       url,
       '--dump-json',
       '--no-playlist',
-      '--no-warnings'
+      '--no-warnings',
+      ...getAuthArgs()
     ]);
 
     const info = JSON.parse(stdout);
@@ -56,8 +74,11 @@ app.post('/api/info', async (req, res) => {
     });
   } catch (err) {
     console.error('Error info:', err.message);
+    const isBot = err.message.includes('Sign in to confirm');
     return res.status(500).json({
-      error: 'No se pudo leer el enlace. Verifica que sea público y válido.'
+      error: isBot
+        ? 'Falta configurar cookies.txt en Render para saltar el bloqueo anti-bot de YouTube.'
+        : 'No se pudo leer el enlace. Verifica que sea público y válido.'
     });
   }
 });
@@ -75,6 +96,7 @@ app.get('/api/stream-download', async (req, res) => {
     url,
     '--no-playlist',
     '--ffmpeg-location', ffmpegPath,
+    ...getAuthArgs(),
     '-o', outputTemplate
   ];
 
