@@ -42,7 +42,7 @@ const sanitizeFilename = (name) =>
 
 function getAuthArgs() {
   const args = [
-    '--js-runtimes', `node:${process.execPath}`,
+    '--js-runtimes', 'deno',
     '--remote-components', 'ejs:github'
   ];
 
